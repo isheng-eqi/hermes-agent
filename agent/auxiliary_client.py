@@ -2148,7 +2148,7 @@ def _try_nous(vision: bool = False) -> Tuple[Optional[OpenAI], Optional[str]]:
                 "Auxiliary Nous client unavailable: no usable inference JWT found "
                 "(run: hermes auth add nous)."
             )
-            _mark_provider_unhealthy("nous", ttl=60)
+            _mark_provider_unhealthy("nous")
             return None, None
         base_url = str((nous or {}).get("inference_base_url") or _nous_base_url()).rstrip("/")
     return (
