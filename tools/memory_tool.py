@@ -612,6 +612,29 @@ class MemoryStore:
             "usage": f"{current:,}/{limit:,}",
         })
 
+    def audit(self, target: str) -> Dict[str, Any]:
+        """Read-only inspection of current-on-disk entries.
+
+        Re-reads the target file under the file lock so the returned inventory
+        includes writes from other sessions.  Returns previews only (truncated
+        to 120 chars), not full entry text.
+        """
+        with self._file_lock(self._path_for(target)):
+            self._reload_target(target, skip_drift=True)
+            entries = self._entries_for(target)
+            current = self._char_count(target)
+            limit = self._char_limit(target)
+            pct = min(100, int((current / limit) * 100)) if limit > 0 else 0
+
+        return {
+            "success": True,
+            "audit": True,
+            "target": target,
+            "usage": f"{pct}% — {current:,}/{limit:,} chars",
+            "entry_count": len(entries),
+            "entries": self._previews(entries, width=120),
+        }
+
     def format_for_system_prompt(self, target: str) -> Optional[str]:
         """
         Return the frozen snapshot for system prompt injection.
@@ -997,6 +1020,12 @@ def memory_tool(
         return json.dumps(result, ensure_ascii=False)
 
     # --- Single-op path ---------------------------------------------------
+    # Audit is a read-only action: dispatch before the write gate and
+    # validation, so it doesn't trigger approval prompts or staging.
+    if action == "audit":
+        result = store.audit(target)
+        return json.dumps(result, ensure_ascii=False)
+
     # Validate required params BEFORE the gate so an invalid write is rejected
     # immediately instead of being staged and only failing at approve time.
     if action == "add" and not content:
@@ -1029,7 +1058,7 @@ def memory_tool(
         result = store.remove(target, old_text)
 
     else:
-        return tool_error(f"Unknown action '{action}'. Use: add, replace, remove", success=False)
+        return tool_error(f"Unknown action '{action}'. Use: add, replace, remove, audit", success=False)
 
     return json.dumps(result, ensure_ascii=False)
 
@@ -1090,8 +1119,8 @@ MEMORY_SCHEMA = {
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["add", "replace", "remove"],
-                "description": "The action to perform (single-op shape). Omit when using 'operations'."
+                "enum": ["add", "replace", "remove", "audit"],
+                "description": "The action to perform (single-op shape). Omit when using 'operations'. 'audit' reads current entries without modifying."
             },
             "target": {
                 "type": "string",
