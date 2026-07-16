@@ -2800,6 +2800,7 @@ def interruptible_streaming_api_call(agent, api_kwargs: dict, *, on_first_delta=
         import httpx as _httpx
 
         _max_stream_retries = env_int("HERMES_STREAM_RETRIES", 2)
+        _stream_backoff = 1.0
 
         try:
             for _stream_attempt in range(_max_stream_retries + 1):
@@ -2842,6 +2843,13 @@ def interruptible_streaming_api_call(agent, api_kwargs: dict, *, on_first_delta=
                     )
                     _is_stream_parse_err = agent._is_provider_stream_parse_error(e)
                     _is_empty_stream = isinstance(e, EmptyStreamError)
+                    _is_anthropic_conn_err = False
+                    if not _is_timeout and not _is_conn_err:
+                        try:
+                            from anthropic import APIConnectionError as _AnthropicConnErr
+                            _is_anthropic_conn_err = isinstance(e, _AnthropicConnErr)
+                        except ImportError:
+                            pass
 
                     # If the stream died AFTER some tokens were delivered:
                     # normally we don't retry (the user already saw text,
@@ -2884,6 +2892,7 @@ def interruptible_streaming_api_call(agent, api_kwargs: dict, *, on_first_delta=
                             _is_timeout
                             or _is_conn_err
                             or _is_sse_conn_err_preview
+                            or _is_anthropic_conn_err
                             or _is_stream_parse_err
                         )
                         _can_silent_retry = (
@@ -2952,6 +2961,8 @@ def interruptible_streaming_api_call(agent, api_kwargs: dict, *, on_first_delta=
                                 )
                             except Exception:
                                 pass
+                        time.sleep(_stream_backoff)
+                        _stream_backoff *= 2
                         continue
 
                     # SSE error events from proxies (e.g. OpenRouter sends
@@ -2988,6 +2999,7 @@ def interruptible_streaming_api_call(agent, api_kwargs: dict, *, on_first_delta=
                         _is_timeout
                         or _is_conn_err
                         or _is_sse_conn_err
+                        or _is_anthropic_conn_err
                         or _is_stream_parse_err
                         or _is_empty_stream
                     ):
@@ -3018,6 +3030,8 @@ def interruptible_streaming_api_call(agent, api_kwargs: dict, *, on_first_delta=
                                     )
                                 except Exception:
                                     pass
+                            time.sleep(_stream_backoff)
+                            _stream_backoff *= 2
                             continue
                         # Retries exhausted. Log the final failure with
                         # full diagnostic detail (chain, headers,
