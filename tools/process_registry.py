@@ -1354,8 +1354,10 @@ class ProcessRegistry:
             result["note"] = "Process recovered after restart -- output history unavailable"
         return result
 
-    def read_log(self, session_id: str, offset: int = 0, limit: int = 200) -> dict:
-        """Read the full output log with optional pagination by lines."""
+    def read_log(self, session_id: str, offset: int | None = None, limit: int = 200) -> dict:
+        """Read the full output log with optional pagination by lines.
+
+        offset: None (default) returns last <limit> lines; 0 returns from line 0."""
         from tools.ansi_strip import strip_ansi
 
         session = self.get(session_id)
@@ -1368,8 +1370,8 @@ class ProcessRegistry:
         lines = full_output.splitlines()
         total_lines = len(lines)
 
-        # Default: last N lines
-        if offset == 0 and limit > 0:
+        # None (default): return last N lines
+        if offset is None and limit > 0:
             selected = lines[-limit:]
             observed_completion_output = bool(selected) or total_lines == 0
         else:
@@ -2239,7 +2241,7 @@ PROCESS_SCHEMA = {
             },
             "offset": {
                 "type": "integer",
-                "description": "Line offset for 'log' action (default: last 200 lines)"
+                "description": "Line offset for 'log' action. Omit (default) to return the last lines; pass 0 to start from line 0."
             },
             "limit": {
                 "type": "integer",
@@ -2303,7 +2305,7 @@ def _handle_process(args, **kw):
             return json.dumps(_redact_process_result(process_registry.poll(session_id)), ensure_ascii=False)
         elif action == "log":
             return json.dumps(_redact_process_result(process_registry.read_log(
-                session_id, offset=args.get("offset", 0), limit=args.get("limit", 200))), ensure_ascii=False)
+                session_id, offset=args.get("offset"), limit=args.get("limit", 200))), ensure_ascii=False)
         elif action == "wait":
             return json.dumps(_redact_process_result(process_registry.wait(session_id, timeout=args.get("timeout"))), ensure_ascii=False)
         elif action == "kill":
