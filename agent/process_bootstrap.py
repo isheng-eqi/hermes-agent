@@ -167,9 +167,9 @@ def _no_proxy_cidr_match(host: str) -> bool:
     if not no_proxy:
         return False
 
-    # Resolve hostname → IP. Use the first AF_INET address.
+    # Resolve hostname → IP. Use AF_UNSPEC to support both IPv4 and IPv6.
     try:
-        addrs = socket.getaddrinfo(host, None, socket.AF_INET, socket.SOCK_STREAM)
+        addrs = socket.getaddrinfo(host, None, socket.AF_UNSPEC, 0)
         host_ip = addrs[0][4][0] if addrs else None
     except Exception:
         return False
