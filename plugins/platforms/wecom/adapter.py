@@ -834,7 +834,7 @@ class WeComAdapter(BasePlatformAdapter):
         if content_disposition:
             match = re.search(r'filename="?([^";]+)"?', content_disposition)
             if match:
-                return match.group(1)
+                return unquote(match.group(1))
 
         name = Path(urlparse(url).path).name or "document"
         if "." not in name:
