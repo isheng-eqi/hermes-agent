@@ -498,6 +498,8 @@ def summarize_background_review_actions(
 
         if verbose:
             action = detail.get("action", "")
+            if action == "audit":
+                continue
             content = detail.get("content", "")
             old_text = detail.get("old_text", "")
             skill_name = detail.get("name", "")
