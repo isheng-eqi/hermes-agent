@@ -1301,6 +1301,17 @@ class PluginManager:
             self._aux_tasks.clear()
             self._slack_action_handlers.clear()
             self._context_engine = None
+            # Reset shell-hook idempotence so they can be re-registered
+            # after discovery completes — the hook table was cleared above
+            # and the guard would otherwise prevent re-wiring. (#60036)
+            try:
+                from agent.shell_hooks import clear_registered
+                clear_registered()
+            except Exception:
+                logger.debug(
+                    "shell-hook idempotence reset failed during force-reload",
+                    exc_info=True,
+                )
         # Set the flag up front as a re-entrancy guard (a plugin's register()
         # can transitively trigger discovery again), but reset it if the sweep
         # raises so a failed scan is NOT cached as "discovered with an empty
@@ -1310,6 +1321,20 @@ class PluginManager:
         self._discovered = True
         try:
             self._discover_and_load_inner()
+            # Re-register shell hooks AFTER plugin discovery so Python
+            # plugin callbacks are registered first.  pre_tool_call
+            # takes the first valid directive; Python plugins must win
+            # ties over shell hooks per the documented contract. (#60036)
+            try:
+                from agent.shell_hooks import register_from_config
+                from hermes_cli.config import load_config
+
+                register_from_config(load_config())
+            except Exception:
+                logger.debug(
+                    "shell-hook re-registration after force-reload failed",
+                    exc_info=True,
+                )
         except BaseException:
             self._discovered = False
             raise
