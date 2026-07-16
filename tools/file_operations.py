@@ -1165,6 +1165,16 @@ class ShellFileOperations(FileOperations):
         except ValueError:
             total_lines = 0
         
+        # If offset is past the end of file, return early with a clear hint.
+        if offset > total_lines:
+            return ReadResult(
+                content="",
+                total_lines=total_lines,
+                file_size=file_size,
+                truncated=False,
+                hint=f"Offset {offset} exceeds file length ({total_lines} lines). File is fully read; no more content."
+            )
+        
         # Check if truncated
         truncated = total_lines > end_line
         hint = None
